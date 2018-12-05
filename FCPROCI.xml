@@ -1,0 +1,44 @@
+<Command xmlns="http://xml.spss.com/spss/extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="extension-1.0.xsd" Name="FCPROCI" Language="R">
+	<Subcommand Name="" IsArbitrary="False" Occurrence="Optional">
+		<Parameter Name="GROUP" ParameterType="VariableName"/>
+		<Parameter Name="EFFECT" ParameterType="VariableName"/>
+		<Parameter Name="ALPHA" ParameterType="Number"/>
+		<Parameter Name="RG" ParameterType="LeadingToken"/>
+		<Parameter Name="RE" ParameterType="LeadingToken"/>
+	</Subcommand>
+	
+	<Subcommand Name="CI" Occurrence="Optional">
+		<Parameter Name="ALL" ParameterType="LeadingToken"/>
+		<Parameter Name="CP" ParameterType="LeadingToken"/>
+		<Parameter Name="AC" ParameterType="LeadingToken"/>
+		<Parameter Name="SC" ParameterType="LeadingToken"/>
+		<Parameter Name="SOC" ParameterType="LeadingToken"/>
+		<Parameter Name="BLACKER" ParameterType="LeadingToken"/>
+		<Parameter Name="WALD" ParameterType="LeadingToken"/>
+	</Subcommand>
+	
+	<Subcommand Name="DIFF" Occurrence="Optional">
+		<Parameter Name="ALL" ParameterType="LeadingToken"/>
+		<Parameter Name="MN" ParameterType="LeadingToken"/>
+		<Parameter Name="ACW" ParameterType="LeadingToken"/>
+		<Parameter Name="ASY" ParameterType="LeadingToken"/>
+		<Parameter Name="ASYY" ParameterType="LeadingToken"/>
+		<Parameter Name="NHS" ParameterType="LeadingToken"/>
+	</Subcommand>
+	
+	<Subcommand Name="RRATIO" Occurrence="Optional">
+		<Parameter Name="ALL" ParameterType="LeadingToken"/>
+		<Parameter Name="GNS" ParameterType="LeadingToken"/>
+		<Parameter Name="MNS" ParameterType="LeadingToken"/>
+		<Parameter Name="MOVER" ParameterType="LeadingToken"/>
+		<Parameter Name="GNC" ParameterType="LeadingToken"/>		
+	</Subcommand>
+	
+	<Subcommand Name="ORATIO" Occurrence="Optional">
+		<Parameter Name="ALL" ParameterType="LeadingToken"/>
+		<Parameter Name="MNS" ParameterType="LeadingToken"/>
+		<Parameter Name="WOOLF" ParameterType="LeadingToken"/>
+		<Parameter Name="EXACT" ParameterType="LeadingToken"/>		
+	</Subcommand>
+	
+</Command>
