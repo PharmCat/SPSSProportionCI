@@ -1,5 +1,5 @@
 # Author: PharmCat
-# Version = 0.0.1 Alpha
+# Version = 0.1.0 Beta
 
 
 Run <- function(args) {
@@ -11,6 +11,8 @@ Run <- function(args) {
         spsspkg.Template("GROUP", subc="", var="group", ktype="varname"),
         spsspkg.Template("EFFECT", subc="", var="effect", ktype="varname"),
 		spsspkg.Template("ALPHA", subc="", var="alpha", ktype="float", vallist=list(0.0, 1.0)),
+		spsspkg.Template("RG", subc="", var="rr", ktype="bool"),
+		spsspkg.Template("RE", subc="", var="rc", ktype="bool"),
 		spsspkg.Template("CP", subc="CI", var="cicp", ktype="bool"),
 		spsspkg.Template("AC", subc="CI", var="ciac", ktype="bool"),
 		spsspkg.Template("SC", subc="CI", var="cisc", ktype="bool"),
@@ -23,7 +25,7 @@ Run <- function(args) {
 		spsspkg.Template("ASYY", subc="DIFF", var="dasyy", ktype="bool"),
 		spsspkg.Template("NHS", subc="DIFF", var="dnhs", ktype="bool"),
 		spsspkg.Template("GNS", subc="RRATIO", var="rrgns", ktype="bool"),
-		spsspkg.Template("MHS", subc="RRATIO", var="rrmhs", ktype="bool"),
+		spsspkg.Template("MNS", subc="RRATIO", var="rrmns", ktype="bool"),
 		spsspkg.Template("MOVER", subc="RRATIO", var="rrmover", ktype="bool"),
 		spsspkg.Template("GNC", subc="RRATIO", var="rrgnc", ktype="bool"),
 		spsspkg.Template("MNS", subc="ORATIO", var="ormns", ktype="bool"),
@@ -36,17 +38,38 @@ Run <- function(args) {
 }
 
 
-exec<-function(group, effect, alpha=0.95, pf=1, cicp=false, ciac=false, cisc=false, cisoc=false, cibl=false, ciwald=false, dmn=false, dacw=false, dasy=false, dasyy=false, dnhs=false, rrgns=false, rrmhs=false, rrmover=false, rrgnc=false, ormns=false, orwoolf=false, orexact=false){
+exec<-function(group, effect, alpha=0.95, rc=FALSE, rr=FALSE, cicp=FALSE, ciac=FALSE, cisc=FALSE, cisoc=FALSE, cibl=FALSE, ciwald=FALSE, dmn=FALSE, dacw=FALSE, dasy=FALSE, dasyy=FALSE, dnhs=FALSE, rrgns=FALSE, rrmns=FALSE, rrmover=FALSE, rrgnc=FALSE, ormns=FALSE, orwoolf=FALSE, orexact=FALSE){
 	library(binGroup)
 	library(PropCIs)
 	library(pairwiseCI)
 	
+	if (!cicp && !ciac && !cisc && !cisoc && !cibl && !ciwald) {
+		cicp = ciac = cisc = cisoc = cibl = ciwald = TRUE
+	}
+	
+	if (dmn || dacw || dasy || dasyy || dnhs) {
+		difftable = TRUE
+	}
+	else {
+		difftable = FALSE
+	}
+	
+	if (rrgns || rrmhs || rrmover || rrgnc ) {
+		rrtable = TRUE
+	}
+	else {
+		rrtable = FALSE
+	}
+	
+	if (ormns || orwoolf || orexact) {
+		ortable = TRUE
+	}
+	else {
+		ortable = FALSE
+	}
+	
 	spsspkg.StartProcedure("Proportion confidence limits")
-	
-	
 	dataset <- spssdata.GetDataFromSPSS(variables=c(group,effect))
-	
-	
 	table <- table(dataset)
 	
 	
@@ -55,6 +78,7 @@ exec<-function(group, effect, alpha=0.95, pf=1, cicp=false, ciac=false, cisc=fal
 	
 	print(attributes(table["dim"]))
 	
+	#Check 2X2 table
 	if (dim(mtt)[1] == 2 && dim(mtt)[2] == 2){
 		
 	} else {
@@ -62,13 +86,13 @@ exec<-function(group, effect, alpha=0.95, pf=1, cicp=false, ciac=false, cisc=fal
 		return ()
 	}
 	
-	if (pf == 1) {
-	mtt <- mtt[,c(2,1)]
+	if (rc) {
+		mtt <- mtt[,c(2,1)]
 	}
 	
-	
-	n1 = mtt[1,1] + mtt [1,2]
-	n2 = mtt[2,1] + mtt [2,2]
+	if (rr) {
+		mtt <- mtt[c(2,1),]
+	}
 	
 	varlabel <- spssdictionary.GetVariableLabel(group)
 	if (varlabel != 0) {
@@ -85,13 +109,19 @@ exec<-function(group, effect, alpha=0.95, pf=1, cicp=false, ciac=false, cisc=fal
 	}
 	
 	labels <- data.frame(spssdictionary.GetValueLabels(group))
-	
 	lab1 <- subset(labels, values==rownames(mtt)[1])[1, "labels"]
 	lab2 <- subset(labels, values==rownames(mtt)[2])[1, "labels"]
+	
+	labels <- data.frame(spssdictionary.GetValueLabels(effect))
+	lab3 <- subset(labels, values==colnames(mtt)[1])[1, "labels"]
+	lab4 <- subset(labels, values==colnames(mtt)[2])[1, "labels"]
+	
 
 	rownames(mtt)[1] <- as.character(lab1)
 	rownames(mtt)[2] <- as.character(lab2)
-	
+	colnames(mtt)[1] <- as.character(lab3)
+	colnames(mtt)[2] <- as.character(lab4)
+
 	spsspivottable.Display(mtt,
 title="2 X 2 Table",
 rowdim=t1rd,
@@ -99,28 +129,64 @@ hiderowdimtitle=FALSE,
 coldim = t1cd,
 hidecoldimtitle=FALSE,
 format=6)
+
 	
-	result <- data.frame()
-	
+	n1 = mtt[1,1] + mtt [1,2]
+	n2 = mtt[2,1] + mtt [2,2]
 	pest = mtt[1,1]/n1
 	
-	ci <- binCI(n=n1,y=mtt[1,1], conf.level=alpha, method="CP")
-	result <- rbind(result, "Clopper-Pearson (Exact)" = c(ci$estimate, ci$conf.int[1], ci$conf.int[2], alpha))
+	#----------------------- PROPORTION CI CALC ---------------------------------------------------------------------
 	
-	ci <- binCI(n=n1,y=mtt[1,1], conf.level=alpha, method="AC")
-	result <- rbind(result, "Agresti-Coull" = c(ci$estimate, ci$conf.int[1], ci$conf.int[2], alpha))
+	result <- data.frame()
+	result2 <- data.frame()
 	
-	ci <- binCI(n=n1,y=mtt[1,1], conf.level=alpha, method="Score")
-	result <- rbind(result, "Wilson Score" = c(ci$estimate, ci$conf.int[1], ci$conf.int[2], alpha))
+	if (cicp){
+		ci <- binCI(n=n1,y=mtt[1,1], conf.level=alpha, method="CP")
+		result <- rbind(result, "Clopper-Pearson (Exact)" = c(ci$estimate, ci$conf.int[1], ci$conf.int[2], alpha))
+		
+		ci <- binCI(n=n1,y=mtt[2,1], conf.level=alpha, method="CP")
+		result2 <- rbind(result2, "Clopper-Pearson (Exact)" = c(ci$estimate, ci$conf.int[1], ci$conf.int[2], alpha))
+	}
 	
-	ci <- binCI(n=n1,y=mtt[1,1], conf.level=alpha, method="SOC")
-	result <- rbind(result, "SOC" = c(ci$estimate, ci$conf.int[1], ci$conf.int[2], alpha))
+	if (ciac){
+		ci <- binCI(n=n1,y=mtt[1,1], conf.level=alpha, method="AC")
+		result <- rbind(result, "Agresti-Coull" = c(ci$estimate, ci$conf.int[1], ci$conf.int[2], alpha))
+
+		ci <- binCI(n=n1,y=mtt[2,1], conf.level=alpha, method="AC")
+		result2 <- rbind(result2, "Agresti-Coull" = c(ci$estimate, ci$conf.int[1], ci$conf.int[2], alpha))	
+	}
 	
-	ci <- binCI(n=n1,y=mtt[1,1], conf.level=alpha, method="Blaker")
-	result <- rbind(result, "Blaker" = c(ci$estimate, ci$conf.int[1], ci$conf.int[2], alpha))
+	if (cisc) {
+		ci <- binCI(n=n1,y=mtt[1,1], conf.level=alpha, method="Score")
+		result <- rbind(result, "Wilson Score" = c(ci$estimate, ci$conf.int[1], ci$conf.int[2], alpha))
+
+		ci <- binCI(n=n1,y=mtt[2,1], conf.level=alpha, method="Score")
+		result2 <- rbind(result2, "Wilson Score" = c(ci$estimate, ci$conf.int[1], ci$conf.int[2], alpha))		
+	}
 	
-	ci <- binCI(n=n1,y=mtt[1,1], conf.level=alpha, method="Wald")
-	result <- rbind(result, "Wald" = c(ci$estimate, ci$conf.int[1], ci$conf.int[2], alpha))
+	if (cisoc) {
+		ci <- binCI(n=n1,y=mtt[1,1], conf.level=alpha, method="SOC")
+		result <- rbind(result, "SOC" = c(ci$estimate, ci$conf.int[1], ci$conf.int[2], alpha))
+	
+		ci <- binCI(n=n1,y=mtt[2,1], conf.level=alpha, method="SOC")
+		result2 <- rbind(result2, "SOC" = c(ci$estimate, ci$conf.int[1], ci$conf.int[2], alpha))
+	}
+	
+	if (cibl) {
+		ci <- binCI(n=n1,y=mtt[1,1], conf.level=alpha, method="Blaker")
+		result <- rbind(result, "Blaker" = c(ci$estimate, ci$conf.int[1], ci$conf.int[2], alpha))
+	
+		ci <- binCI(n=n1,y=mtt[2,1], conf.level=alpha, method="Blaker")
+		result2 <- rbind(result2, "Blaker" = c(ci$estimate, ci$conf.int[1], ci$conf.int[2], alpha))	
+	}
+	
+	if (ciwald) {
+		ci <- binCI(n=n1,y=mtt[1,1], conf.level=alpha, method="Wald")
+		result <- rbind(result, "Wald" = c(ci$estimate, ci$conf.int[1], ci$conf.int[2], alpha))
+	
+		ci <- binCI(n=n1,y=mtt[2,1], conf.level=alpha, method="Wald")
+		result2 <- rbind(result2, "Wald" = c(ci$estimate, ci$conf.int[1], ci$conf.int[2], alpha))
+	}
 	
 	colnames(result)[1] <- "Estimate"
 	colnames(result)[2] <- "Lower"
@@ -128,33 +194,12 @@ format=6)
 	colnames(result)[4] <- "Alpha"
 	
 	spsspivottable.Display(result,
-title=paste0("Proportion Confidence Limits for group: \"", lab1, "\""),
+title=paste0("Proportion Confidence Limits for group: \"", lab1, "\"" , "\n (", lab3 ,"/", lab4, ")"),
 rowdim="Method",
 hiderowdimtitle=FALSE,
-coldim = "Intrvals",
+coldim = "Intervals",
 hidecoldimtitle=FALSE,
 format=2)
-
-
-	result2 <- data.frame()
-	
-	ci <- binCI(n=n1,y=mtt[2,1], conf.level=alpha, method="CP")
-	result2 <- rbind(result2, "Clopper-Pearson (Exact)" = c(ci$estimate, ci$conf.int[1], ci$conf.int[2], alpha))
-	
-	ci <- binCI(n=n1,y=mtt[2,1], conf.level=alpha, method="AC")
-	result2 <- rbind(result2, "Agresti-Coull" = c(ci$estimate, ci$conf.int[1], ci$conf.int[2], alpha))
-	
-	ci <- binCI(n=n1,y=mtt[2,1], conf.level=alpha, method="Score")
-	result2 <- rbind(result2, "Wilson Score" = c(ci$estimate, ci$conf.int[1], ci$conf.int[2], alpha))
-	
-	ci <- binCI(n=n1,y=mtt[2,1], conf.level=alpha, method="SOC")
-	result2 <- rbind(result2, "SOC" = c(ci$estimate, ci$conf.int[1], ci$conf.int[2], alpha))
-	
-	ci <- binCI(n=n1,y=mtt[2,1], conf.level=alpha, method="Blaker")
-	result2 <- rbind(result2, "Blaker" = c(ci$estimate, ci$conf.int[1], ci$conf.int[2], alpha))
-	
-	ci <- binCI(n=n1,y=mtt[2,1], conf.level=alpha, method="Wald")
-	result2 <- rbind(result2, "Wald" = c(ci$estimate, ci$conf.int[1], ci$conf.int[2], alpha))
 	
 	colnames(result2)[1] <- "Estimate"
 	colnames(result2)[2] <- "Lower"
@@ -162,31 +207,45 @@ format=2)
 	colnames(result2)[4] <- "Alpha"
 
 	spsspivottable.Display(result2,
-title=paste0("Proportion Confidence Limits for group: \"", lab2, "\""),
+title=paste0("Proportion Confidence Limits for group: \"", lab2, "\"" , "\n (", lab3 ,"/", lab4, ")"),
 rowdim="Method",
 hiderowdimtitle=FALSE,
-coldim = "Intrvals",
+coldim = "Intervals",
 hidecoldimtitle=FALSE,
 format=2)
 	
-	#ediff <- data.frame(BinomCI(n1=n1,n2=n2, x=mtt[1,1], y=mtt[2,1],conf.level=alpha,CItype="Two.sided"))
+	#----------------------- PROPORTION DIFFERENCE CI CALC ---------------------------------------------------------------------
+	# dmn || dacw || dasy || dasyy || dnhs
+	
+	if (difftable) {
 	
 	ediff <- data.frame()
 	difest = mtt[1,1]/(mtt[1,1]+mtt[1,2])- mtt[2,1]/(mtt[2,1]+mtt[2,2])
-	ci <- diffscoreci(x1=mtt[1,1], n1=n1, x2=mtt[2,1], n2=n2, conf.level=alpha)
-	ediff <- rbind(ediff, "Miettinen-Nurminen asymptotic score" = c(0, ci$conf.int[1], ci$conf.int[2], alpha))
 	
-	ci <- wald2ci(x1=mtt[1,1], n1=n1, x2=mtt[2,1], n2=n2, conf.level=alpha, adjust="AC")
-	ediff <- rbind(ediff, "Wald (Agresti-Caffo adjusted)" = c(ci$estimate, ci$conf.int[1], ci$conf.int[2], alpha))
+	if (dmn) {
+		ci <- diffscoreci(x1=mtt[1,1], n1=n1, x2=mtt[2,1], n2=n2, conf.level=alpha)
+		ediff <- rbind(ediff, "Miettinen-Nurminen asymptotic score" = c(difest, ci$conf.int[1], ci$conf.int[2], alpha))
+	}
 	
-	ci <- prop.test(as.matrix(mtt), correct=FALSE)	
-	ediff <- rbind(ediff, "The asymptotic" = c(ci$estimate[1]-ci$estimate[2], ci$conf.int[1], ci$conf.int[2], alpha))
+	if(dacw){
+		ci <- wald2ci(x1=mtt[1,1], n1=n1, x2=mtt[2,1], n2=n2, conf.level=alpha, adjust="AC")
+		ediff <- rbind(ediff, "Wald (Agresti-Caffo adjusted)" = c(ci$estimate, ci$conf.int[1], ci$conf.int[2], alpha))
+	}
 	
-	ci <- prop.test(as.matrix(mtt), correct=TRUE)	
-	ediff <- rbind(ediff, "The asymptotic (Yates')" = c(ci$estimate[1]-ci$estimate[2], ci$conf.int[1], ci$conf.int[2], alpha))
+	if (dasy){
+		ci <- prop.test(as.matrix(mtt), correct=FALSE)	
+		ediff <- rbind(ediff, "The asymptotic" = c(ci$estimate[1]-ci$estimate[2], ci$conf.int[1], ci$conf.int[2], alpha))
+	}
 	
-	ci <- Prop.diff(x=c(mtt[1,1],mtt[1,2]),y=c(mtt[2,1],mtt[2,2]), CImethod="NHS")
-	ediff <- rbind(ediff, "Newcombes Hybrid Score" = c(ci$estimate, ci$conf.int[1], ci$conf.int[2], alpha))
+	if (dasyy) {
+		ci <- prop.test(as.matrix(mtt), correct=TRUE)	
+		ediff <- rbind(ediff, "The asymptotic (Yates')" = c(ci$estimate[1]-ci$estimate[2], ci$conf.int[1], ci$conf.int[2], alpha))
+	}
+	
+	if (dnhs) {
+		ci <- Prop.diff(x=c(mtt[1,1],mtt[1,2]),y=c(mtt[2,1],mtt[2,2]), CImethod="NHS")
+		ediff <- rbind(ediff, "Newcombes Hybrid Score" = c(ci$estimate, ci$conf.int[1], ci$conf.int[2], alpha))
+	}
 	
 	colnames(ediff)[1] <- "Estimate"
 	colnames(ediff)[2] <- "Lower"
@@ -194,28 +253,42 @@ format=2)
 	colnames(ediff)[4] <- "Alpha"
 	
 	spsspivottable.Display(ediff,
-title=paste("Proportion Difference Confidence Limits"),
+title=paste("Proportion Difference Confidence Limits" , "\n (", lab1 , " - ", lab2, ")"),
 rowdim="Method",
 hiderowdimtitle=FALSE,
-coldim = "Intrvals",
+coldim = "Intervals",
 hidecoldimtitle=FALSE,
 format=2)
+
+	}
+	#----------------------- PROPORTION DRATIO / RISK RATIO CI CALC ---------------------------------------------------------------------
+	# rrgns || rrmns || rrmover || rrgnc
+	
+	
+	if (rrtable) {
 	
 	rrest = (mtt[1,1]/(mtt[1,1]+mtt[1,2]))/(mtt[2,1]/(mtt[2,1]+mtt[2,2]))
-	
 	riskr <- data.frame()
 	
-	ci <- Prop.ratio(x=c(mtt[1,1],mtt[1,2]),y=c(mtt[2,1],mtt[2,2]), CImethod="Score")
-	riskr <- rbind(riskr, "Gart-Nam Score" = c(rrest, ci$conf.int[1], ci$conf.int[2], alpha))
+	if(rrgns){
+		ci <- Prop.ratio(x=c(mtt[1,1],mtt[1,2]),y=c(mtt[2,1],mtt[2,2]), CImethod="Score")
+		riskr <- rbind(riskr, "Gart-Nam Score" = c(rrest, ci$conf.int[1], ci$conf.int[2], alpha))
+	}
 	
-	ci <- Prop.ratio(x=c(mtt[1,1],mtt[1,2]),y=c(mtt[2,1],mtt[2,2]), CImethod="MNScore")
-	riskr <- rbind(riskr, "Miettinen-Nurminen Score" = c(rrest, ci$conf.int[1], ci$conf.int[2], alpha))
+	if(rrmns) {
+		ci <- Prop.ratio(x=c(mtt[1,1],mtt[1,2]),y=c(mtt[2,1],mtt[2,2]), CImethod="MNScore")
+		riskr <- rbind(riskr, "Miettinen-Nurminen Score" = c(rrest, ci$conf.int[1], ci$conf.int[2], alpha))
+	}
 	
-	ci <- Prop.ratio(x=c(mtt[1,1],mtt[1,2]),y=c(mtt[2,1],mtt[2,2]), CImethod="MOVER")
-	riskr <- rbind(riskr, "Method of variance estimates recovery (Donner, Zou, 2012)" = c(rrest, ci$conf.int[1], ci$conf.int[2], alpha))
+	if (rrmover) {
+		ci <- Prop.ratio(x=c(mtt[1,1],mtt[1,2]),y=c(mtt[2,1],mtt[2,2]), CImethod="MOVER")
+		riskr <- rbind(riskr, "Method of variance estimates recovery (Donner, Zou, 2012)" = c(rrest, ci$conf.int[1], ci$conf.int[2], alpha))
+	}
 	
-	ci <- Prop.ratio(x=c(mtt[1,1],mtt[1,2]),y=c(mtt[2,1],mtt[2,2]), CImethod="GNC")
-	riskr <- rbind(riskr, "Crude log interval" = c(rrest, ci$conf.int[1], ci$conf.int[2], alpha))
+	if (rrgnc) {
+		ci <- Prop.ratio(x=c(mtt[1,1],mtt[1,2]),y=c(mtt[2,1],mtt[2,2]), CImethod="GNC")
+		riskr <- rbind(riskr, "Crude log interval" = c(rrest, ci$conf.int[1], ci$conf.int[2], alpha))
+	}
 	
 	colnames(riskr)[1] <- "Estimate"
 	colnames(riskr)[2] <- "Lower"
@@ -223,24 +296,35 @@ format=2)
 	colnames(riskr)[4] <- "Alpha"
 	
 	spsspivottable.Display(riskr,
-title=paste("Relative Risk Confidence Limits"),
+title=paste("Relative Risk Confidence Limits", "\n (", lab1 , "/", lab2, ")"),
 rowdim="Method",
 hiderowdimtitle=FALSE,
-coldim = "Intrvals",
+coldim = "Intervals",
 hidecoldimtitle=FALSE,
 format=2)
+
+	}
+
+	#----------------------- ODD RATIO CI CALC ---------------------------------------------------------------------
+	# ormns || orwoolf || orexact
 	
 	orest = (mtt[1,1]/mtt[2,1])/(mtt[1,2]/mtt[2,2]) 
-	
 	oddr <- data.frame()
-	ci <- orscoreci(x1=mtt[1,1], n1=n1, x2=mtt[2,1], n2=n2, conf.level=alpha)
-	oddr <- rbind(oddr, "MN Score" = c(orest, ci$conf.int[1], ci$conf.int[2], alpha))
-
-	ci <- Prop.or(x=c(mtt[1,1],mtt[1,2]),y=c(mtt[2,1],mtt[2,2]), CImethod="Woolf")
-	oddr <- rbind(oddr, "Adjusted Woolf interval" = c(ci$estimate , ci$conf.int[1], ci$conf.int[2], alpha))
 	
-	ci <- Prop.or(x=c(mtt[1,1],mtt[1,2]),y=c(mtt[2,1],mtt[2,2]), CImethod="Exact")
-	oddr <- rbind(oddr, "Exact CI" = c(ci$estimate, ci$conf.int[1], ci$conf.int[2], alpha))
+	if (ormns){
+		ci <- orscoreci(x1=mtt[1,1], n1=n1, x2=mtt[2,1], n2=n2, conf.level=alpha)
+		oddr <- rbind(oddr, "MN Score" = c(orest, ci$conf.int[1], ci$conf.int[2], alpha))
+	}
+	
+	if (orwoolf){
+		ci <- Prop.or(x=c(mtt[1,1],mtt[1,2]),y=c(mtt[2,1],mtt[2,2]), CImethod="Woolf")
+		oddr <- rbind(oddr, "Adjusted Woolf interval" = c(ci$estimate , ci$conf.int[1], ci$conf.int[2], alpha))
+	}
+	
+	if(orexact) {
+		ci <- Prop.or(x=c(mtt[1,1],mtt[1,2]),y=c(mtt[2,1],mtt[2,2]), CImethod="Exact")
+		oddr <- rbind(oddr, "Exact CI" = c(ci$estimate, ci$conf.int[1], ci$conf.int[2], alpha))
+	}
 	
 	colnames(oddr)[1] <- "Estimate"
 	colnames(oddr)[2] <- "Lower"
@@ -248,10 +332,10 @@ format=2)
 	colnames(oddr)[4] <- "Alpha"
 	
 	spsspivottable.Display(oddr,
-title=paste("Odd Ratio Confidence Limits"),
+title=paste("Odd Ratio Confidence Limits" , "\n (", lab1 , "/", lab2, ")"),
 rowdim="Method",
 hiderowdimtitle=FALSE,
-coldim = "Intrvals",
+coldim = "Intervals",
 hidecoldimtitle=FALSE,
 format=2)
 
